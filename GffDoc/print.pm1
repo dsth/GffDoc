@@ -1,1 +1,24 @@
-/home/dsth/project/tools/parser/GffDoc/print.pm1
+package GffDoc::print;
+use strict;
+use warnings;
+
+my $l;
+
+sub print_number {
+    my $str = shift;
+    $l = length $str;
+    print qq{$str};
+    return;
+}
+
+sub print_clean {
+    my $r = shift;
+    #print qq{\x08} x $l;
+    #print qq{here-=-} x $r;
+  #  die;
+    return;
+}
+
+
+1;
+
