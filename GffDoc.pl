@@ -1,9 +1,10 @@
+#!/homes/dsth/dev/localperl/bin/perl
 #/ this has been done with no regard to efficiency at all. there are some fairly simple changes that can be made to improve speed 
 #r/ either way the process should be faster as it gets furhter along - i.e. shorter lists left...
 
-#={{{1 use statements
 use strict;
 use warnings;
+
 use GffDoc::Exceptions qw/moan moan_e moan_ref $nt/;
 use GffDoc::Types; # not needed 
 use GffDoc::Parser;
@@ -11,6 +12,7 @@ use GffDoc::Build;
 use GffDoc::Check;
 use GffDoc::RefCheck;
 use GffDoc::eStore;
+
 use DBI;
 use Log::Log4perl qw(get_logger :levels);
 use Getopt::Long;
@@ -128,8 +130,8 @@ eval {
 
     for my $type (@types) {
         my ($t, $a) = split '=', $type;
-        $a =~ /^(ignore|gene(\x3a\w+)?|pseudogene|mRNA(\x3a\w+)?|exon|CDS)$/ || Exception::GffDoc->throw( stage => 'Options', type => 'IlegalTypeReclassification',
-            error => 'The type reclassifier must be one of ignore, gene, pseudogene, mRNA, exon or CDS: '.$t.'='.$a 
+        $a =~ /^(ignore|gene(\x3a\w+)?|pseudogene|mRNA(\x3a\w+)?|exon|CDS|polypeptide)$/ || Exception::GffDoc->throw( stage => 'Options', type => 'IlegalTypeReclassification',
+            error => 'The type reclassifier must be one of ignore, gene, pseudogene, mRNA, exon, CDS or polypeptide: '.$t.'='.$a 
         );
         $types{$t} = $a;
     }
@@ -242,7 +244,7 @@ my $parser = GffDoc::Parser->new(
     leafnonunique   => $leafnonunique,
     modules         => scalar @modules,
     polypeptide     => $polypeptide,
-    pseudo_string          => $pseudo_string,
+    pseudo_string   => $pseudo_string,
     types           => \%types,
     types_regexp    => $permitted_types,
     gff_feature_num => $preparser->gff_feature_num(),

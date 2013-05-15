@@ -550,7 +550,14 @@ eval {
 
 #/ make it handle two ways multiple parents may be declared
 
-            my @parents = ($attribs =~ /Parent=\s?(\S+?)\s?;/g);
+            my @parents;
+			if ($type eq 'polypeptide') {
+				@parents = ($attribs =~ /(?:Parent|Derives_from)=\s?(\S+?)\s?;/g);
+				# Uniquify, in case Parent and Derives_from duplicate data.
+				@parents = keys %{{ map {$_ => 'superstar'} @parents}} if @parents;
+			} else {
+				@parents = ($attribs =~ /Parent=\s?(\S+?)\s?;/g);
+			}
  
             if ((scalar @parents == 1) && ($parents[0] =~ /,/)) {
                 @parents = split(q{,}, $parents[0]);              
@@ -562,7 +569,7 @@ eval {
 
             #if ($attribs =~ /Parent=\s?(\S+?)\s?;/) { $parent_str = $1; }
 
-            if ((scalar @parents > 1) && ($type eq 'exon' || $type eq 'CDS')) {
+            if ((scalar @parents > 1) && ($type eq 'exon' || $type eq 'CDS' || $type eq 'polypeptide')) {
             #if (($parent_str =~ /,/) && ($type eq 'exon' || $type eq 'CDS')) {
 
                 #my @parents = split(q{,}, $parent_str);

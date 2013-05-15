@@ -25,7 +25,7 @@ sub run {
     $missing = 1 if (!$gffdoc->mRNAArray()->features());
     $missing = 1 if (!$gffdoc->CDSArray()->features());
 
-    Exception::GffDoc->throw( stage => 'Convert', type => 'WrongModule', 
+    Exception::GffDoc->throw( stage => 'Convert', type => 'WrongModule',
       error => 'This module requires gene, mRNA and CDS feature types!'
     ) if ($missing);
 
@@ -51,12 +51,13 @@ sub run {
     #my ($prob2) = grep { !defined $cds_coords_by_mrna{$_} } (keys %mrna_coords);
 
     while (my ($k,$v) = each %cds_coords_by_mrna) {
+        my $exon_count = 0;
 
         #y not sure why bother re-ordering yet, but makes little difference...
         my @ordered_list = sort { $a->[0] <=> $b->[0] } @{$v};
         #my @list = sort { $b->[0] <=> $a->[0] } @{$v};
 
-        if (scalar @ordered_list == 0) { 
+        if (scalar @ordered_list == 0) {
 
             Exception::GffDoc->throw( stage => 'Convert', type => 'WrongModule', error => 'this is a mess' );
 
@@ -66,16 +67,17 @@ sub run {
             my ($mRNA) = grep { $_->id() eq $k } @{$gffdoc->mRNAArray()->features()};
 
             if ($mRNA) {
+                $exon_count++;
 
                 my $Feature = GffDoc::Feature::Gff3::exon->new(
                     biotype => 'protein_coding',
                     end     => $mRNA->end(),
-                    id      => 'ID='.$mRNA->id().'-E;Parent='.$mRNA->id().';',
-                    phase   => '.', 
-                    seqid   => $mRNA->seqid(), 
+                    id      => 'ID='.$mRNA->id().'-E'.$exon_count.';Parent='.$mRNA->id().';',
+                    phase   => '.',
+                    seqid   => $mRNA->seqid(),
                     source  => 'GffDoc::Convert::UtrExon',
-                    start   => $mRNA->start(), 
-                    strand => $mRNA->strand(), 
+                    start   => $mRNA->start(),
+                    strand => $mRNA->strand(),
                     #parent => $from_thing->parent(),
                 );
 
@@ -83,7 +85,7 @@ sub run {
 
                 $gffdoc->exonArray->add($Feature);
 
-            } else { 
+            } else {
                 Exception::GffDoc->throw( stage => 'Convert', type => 'WrongModule', error => 'cannot find mRNA' );
             }
         #r need to iterate through the ordered list
@@ -93,7 +95,7 @@ sub run {
 
             if ($mRNA) {
 
-                
+
                 for my $i (0..$#ordered_list) {
 
                     my $cds = $ordered_list[$i];
@@ -113,18 +115,20 @@ sub run {
 #                        $exon_end = $cds->[1];
 #                    }
 
+                    $exon_count++;
+
                     my $exon_start = $i == 0 ? $mRNA->start() : $cds->[0];
                     my $exon_end = $i == $#ordered_list ? $mRNA->end() : $cds->[1];
 
                     my $Feature = GffDoc::Feature::Gff3::exon->new(
                         biotype => 'protein_coding',
                         end     => $exon_end,
-                        id      => 'ID='.$mRNA->id().'-E;Parent='.$mRNA->id().';',
-                        phase   => '.', 
-                        seqid   => $mRNA->seqid(), 
+                        id      => 'ID='.$mRNA->id().'-E'.$exon_count.';Parent='.$mRNA->id().';',
+                        phase   => '.',
+                        seqid   => $mRNA->seqid(),
                         source  => 'GffDoc::Convert::UtrExon',
-                        start   => $exon_start, 
-                        strand => $mRNA->strand(), 
+                        start   => $exon_start,
+                        strand => $mRNA->strand(),
                         #parent => $from_thing->parent(),
                     );
 
@@ -132,9 +136,9 @@ sub run {
 
                     $gffdoc->exonArray->add($Feature);
 
-                } 
-                
-            } else { 
+                }
+
+            } else {
                 Exception::GffDoc->throw( stage => 'Convert', type => 'WrongModule', error => 'cannot find mRNA' );
             }
 

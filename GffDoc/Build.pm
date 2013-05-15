@@ -9,6 +9,11 @@ my $nt = qq{\n\t};
 
 #y/ as yet this does not grab names or seq edits from polypetides with polypeptide option - the option is really only
 #y/ there for the polypeptide_build option atm.
+# JA: This should now do the former; that is, if -polypeptide is specified,
+# then $gffdoc should have a polypeptide array, with 'parent' or 'derives_from'
+# details (or both) which can then be used to add the array to the appropriate
+# mRNA object. The eStore module knows to look for this array, and use the
+# polypeptide ID(s) if they exist.
 
 sub run {
 
@@ -80,7 +85,12 @@ eval {
 
             my $kiddyname = $kiddymRNA->id();
             my $kiddyexons = $gffdoc->exonArray->findParentsDestructive($kiddyname);
-            my $kiddyCDSs = $gffdoc->CDSArray->findParentsDestructive($kiddyname);
+			my $kiddyCDSs = $gffdoc->CDSArray->findParentsDestructive($kiddyname);
+			my $kiddypps;
+			if (defined $gffdoc->polypeptideArray() && $gffdoc->polypeptideArray()->features() && 
+				scalar @{$gffdoc->polypeptideArray()->features()} > 0) {
+				$kiddypps = $gffdoc->polypeptideArray->findParentsDestructive($kiddyname);
+			}
 
             # we allow for no CDS for pseudogenes - till the genes are constructed we don't know which is which
             #/ have to make this biotype dependent?!?
@@ -95,6 +105,7 @@ eval {
             #print qq{\nCDSs: }, scalar @{$kiddyCDSs};
             $gffmRNA->_exons($kiddyexons);
             $gffmRNA->_CDSs($kiddyCDSs);
+            $gffmRNA->_polypeptides($kiddypps) if $kiddypps;
             $gffGene->addmRNA($gffmRNA);
         }
 

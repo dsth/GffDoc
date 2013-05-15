@@ -27,7 +27,7 @@ sub run {
     for my $feat (@features) {
 
         #print qq{\n}, ref $feat;
-        $seqids{$feat->seqid()} = 1; 
+        $seqids{$feat->seqid()} = 1;
     }
 
     my @seqids = (keys %seqids);
@@ -82,7 +82,7 @@ has 'non_coding_cds' => (is => 'rw');
 #        -STRAND     =>  $gene->strand,
 #        -BIOTYPE    =>  $gene->biotype,
 #        @rest
-#    );    
+#    );
 #}
 
 sub run {
@@ -105,7 +105,7 @@ sub run {
     my %eException_msgs;
 
     $log4->info('Starting commitment.');
-    
+
     my $analysis = Bio::EnsEMBL::Analysis->new(-logic_name => $self->logicname());
 
     $self->analysis($analysis);
@@ -126,7 +126,7 @@ eval {
 
         #/################### wrap this in eval and catch at the end of the loop with a next GFFGENE...
 
-        if ($c == 0 || $c % 10 == 0) {  
+        if ($c == 0 || $c % 10 == 0) {
             my $p = sprintf(q{%.2f},100*$c/$genes);
             #GffDoc::print::print_clean(9);
             GffDoc::print::print_number($p.'%');
@@ -140,86 +140,115 @@ eval {
         )
 
         if (!exists $slices->{$gffGene->seqid()});
-        
+
         my $slice = $slices->{$gffGene->seqid()},
         my $strand = $gffGene->strand() eq '+' ? 1 : -1,
-        
+
         my $biotype = $gffGene->biotype();
 
         my $eGene = Bio::EnsEMBL::Gene->new(
-                -ANALYSIS   =>  $self->analysis(),
-                -VERSION    =>  $self->version(),
-                -SLICE      =>  $slice,
-                -STRAND     =>  $strand,
-                -START      =>  $gffGene->start(), # really no need the API bins it and calculates it from transcripts
-                -END        =>  $gffGene->end(),
-                -STABLE_ID  =>  $gffGene->id(),
-                -BIOTYPE    =>  $biotype,
+                -ANALYSIS       =>  $self->analysis(),
+                -VERSION        =>  $self->version(),
+                -SLICE          =>  $slice,
+                -STRAND         =>  $strand,
+                -START          =>  $gffGene->start(), # really no need the API bins it and calculates it from transcripts
+                -END            =>  $gffGene->end(),
+                -STABLE_ID      =>  $gffGene->id(),
+                -BIOTYPE        =>  $biotype,
+                -CREATED_DATE   =>  time,
+                -MODIFIED_DATE  =>  time,
             );
 
         for my $mRNA (@{$gffGene->mRNAs}) {
 
              my $eTrans = Bio::EnsEMBL::Transcript->new(
-                    -ANALYSIS   =>  $self->analysis(),
-                    -VERSION    =>  $self->version(),
-                    -SLICE      =>  $slice,
-                    -STRAND     =>  $strand,
-                    -START      =>  $mRNA->start(),
-                    -END        =>  $mRNA->end(),
-                    -BIOTYPE    =>  $biotype,
-                    -STABLE_ID  =>  $mRNA->id(),
+                    -ANALYSIS       =>  $self->analysis(),
+                    -VERSION        =>  $self->version(),
+                    -SLICE          =>  $slice,
+                    -STRAND         =>  $strand,
+                    -START          =>  $mRNA->start(),
+                    -END            =>  $mRNA->end(),
+                    -BIOTYPE        =>  $mRNA->biotype(),
+                    -STABLE_ID      =>  $mRNA->id(),
+                    -CREATED_DATE   =>  time,
+                    -MODIFIED_DATE  =>  time,
                 );
 
-
-#y/ possibly put in polypeptide name handline and seqedits here?!?
-
-            my $eTRNSL; #y peptide so caplitalise...
+			# Edit by JA to use polypeptide ids, if we have 'em
+			my $canonical_TRNSL;
+			my $alt_TRNSLs = 0;
             if ($biotype eq 'protein_coding') {
+				my @translations;
+				if (defined $mRNA->polypeptides() && scalar(@{$mRNA->polypeptides()}) > 0) {
+            		for my $polypeptide (@{$mRNA->polypeptides()}) {
+						push @translations, $polypeptide->id();
+					}
+				} else {
+                	my $TRNSLid = $mRNA->id();
+                	$TRNSLid =~ s/-R(\w)$/-P$1/;
+					push @translations, $TRNSLid;
+					# Show warning if $TRNSLid eq $mRNA->id() ?
+                }
 
-                #y for now not using polypeptides
-                my $TRNSLid = $mRNA->id() ;
-                $TRNSLid =~ s/-R(\w)$/-P$1/;
-                
-                    $eTRNSL = Bio::EnsEMBL::Translation->new( # transcript-translation is 1-to-1 atm
-                        -ANALYSIS   =>  $self->analysis(),
-                        -VERSION    =>  $self->version(),
-                        -SLICE      =>  $slice,
-                        -STABLE_ID  =>  $TRNSLid,
-                        -STRAND     =>  $strand,
+				# Health warning: if polypeptides > 1, we assume that
+				# the first is the canonical translation, but have
+				# done nothing to ensure that is the case.
+				my $canonical = 1;
+				foreach my $TRNSLid (@translations) {
+            		my $eTRNSL; #y peptide so caplitalise...
+                    $eTRNSL = Bio::EnsEMBL::Translation->new(
+                        -ANALYSIS       =>  $self->analysis(),
+                        -VERSION        =>  $self->version(),
+                        -SLICE          =>  $slice,
+                        -STABLE_ID      =>  $TRNSLid,
+                        -STRAND         =>  $strand,
+						-CREATED_DATE   =>  time,
+						-MODIFIED_DATE  =>  time,
                     );
 
-                #y bind translation-transcript 
-                $eTrans->translation($eTRNSL);
+                	#y bind translation-transcript
+					if ($canonical) {
+                		$eTrans->translation($eTRNSL);
+						$canonical_TRNSL = $eTRNSL;
+						$canonical = 0;
+					} else {
+						$eTrans->add_alternative_translation($eTRNSL);
+						$alt_TRNSLs = 1;
+					}
+				}
             }
 
             ENSEXON:
             my @exons = @{$mRNA->exons()};
-            
+
             for my $n (0..$#exons) {
 
                 #y/ exon unique names
-                my $exonid = $exons[$n]->id() ? $exons[$n]->id() : $gffGene->id().'-E'.$c; # re-use $c
+                # JA: The previous method didn't work if more than two exons had the same
+                # location/ID but different phases.
+                my $exonid = $exons[$n]->id() ? $exons[$n]->id() : $gffGene->id().'-E'.($n+1);
                 if (exists $exon_names{$exonid}) {
-                    $exonid .= $c;
-                } else {
-                    $exon_names{$exonid} = 1;
+                    $exonid .= '-'.$exon_names{$exonid};
                 }
+                $exon_names{$exonid}++;
 
                  my $eExon = Bio::EnsEMBL::Exon->new(
-                        -ANALYSIS   =>  $self->analysis(),
-                        -VERSION    =>  $self->version(),
-                        -STABLE_ID  =>  $exonid,
-                        -SLICE      =>  $slice,
-                        -STRAND     =>  $strand,
-                        -START      =>  $exons[$n]->start(),
-                        -END        =>  $exons[$n]->end(),
-                        -PHASE      =>  $exons[$n]->ephase_start(),
-                        -END_PHASE  =>  $exons[$n]->ephase_end(),
+                        -ANALYSIS       =>  $self->analysis(),
+                        -VERSION        =>  $self->version(),
+                        -STABLE_ID      =>  $exonid,
+                        -SLICE          =>  $slice,
+                        -STRAND         =>  $strand,
+                        -START          =>  $exons[$n]->start(),
+                        -END            =>  $exons[$n]->end(),
+                        -PHASE          =>  $exons[$n]->ephase_start(),
+                        -END_PHASE      =>  $exons[$n]->ephase_end(),
+                        -CREATED_DATE   =>  time,
+                        -MODIFIED_DATE  =>  time,
                     );
 
                     $exons[$n]->_eExon($eExon); # lazy but still let system be extendible to multiple translations
 
-                    $eTrans->add_Exon($eExon); 
+                    $eTrans->add_Exon($eExon);
 
             }
 
@@ -231,25 +260,33 @@ eval {
 #                if ($sumed_cds_length % 3 != 0) {
 #                if ($cds_num != $#{$CDS_refs}) {
 
-                $eTRNSL->start_Exon($mRNA->trnsl_start_exon()->eExon());
-                $eTRNSL->start($mRNA->trnsl_start_base());
-                $eTRNSL->end_Exon($mRNA->trnsl_end_exon()->eExon());
-                $eTRNSL->end($mRNA->trnsl_end_base());
+                $canonical_TRNSL->start_Exon($mRNA->trnsl_start_exon()->eExon());
+                $canonical_TRNSL->start($mRNA->trnsl_start_base());
+                $canonical_TRNSL->end_Exon($mRNA->trnsl_end_exon()->eExon());
+                $canonical_TRNSL->end($mRNA->trnsl_end_base());
 
-                #y put in non_coding_cds checks here and throw accordingly...
+				if ($alt_TRNSLs) {
+					foreach my $TRNSL (@{$eTrans->get_all_alternative_translations()}) {
+						$TRNSL->start_Exon($mRNA->trnsl_start_exon()->eExon());
+                		$TRNSL->start($mRNA->trnsl_start_base());
+                		$TRNSL->end_Exon($mRNA->trnsl_end_exon()->eExon());
+                		$TRNSL->end($mRNA->trnsl_end_base());
+					}
+				}
 
-                my $seq = $eTRNSL->seq();
+                my $seq = $canonical_TRNSL->seq();
 
                 if(!$seq || $seq eq '' || $seq =~ /\*/) {
-                
+
                     if ($self->non_coding_cds()) {
-                        $eTrans->biotype('non_coding_cds');
-                        $eGene->biotype('non_coding_cds');
+                        $eTrans->biotype('nontranslating_CDS');
+                        $eTrans->translation(undef);
+                        $eGene->biotype('nontranslating_CDS');
                         $non_coding++;
-                        $log4->warn('Translation for transcript '.$mRNA->id().' contains stop codons. Re-classifying biotype as non_coding_cds');
+                        $log4->warn('Translation for transcript '.$mRNA->id().' contains stop codons. Re-classifying biotype as nontranslating_CDS');
                     } else {
-                        Exception::GffDoc::StopCodons->throw( stage => 'ensembl', type => 'TRNSL::StopCodons', 
-                            error => 'Stop codons are no tolerated within Translations unless you run with -non_coding_cds option!'
+                        Exception::GffDoc::StopCodons->throw( stage => 'ensembl', type => 'TRNSL::StopCodons',
+                            error => 'Stop codons are not tolerated within Translations unless you run with -non_coding_cds option!'
                         );
                     }
 
@@ -275,14 +312,14 @@ my $e;
 if ( $e = Exception::Class->caught('Exception::GffDoc::StopCodons') ) {
     moan_e ( ref $e, $e->stage, $e->type, $e->error, $e->package, $e->file, $e->line, $e->trace->as_string );
     exit;
-} elsif ( $e = Exception::Class->caught('Exception::GffDoc::Gene::MissingSlice') ) { 
+} elsif ( $e = Exception::Class->caught('Exception::GffDoc::Gene::MissingSlice') ) {
     moan_e ( ref $e, $e->stage, $e->type, $e->error, $e->package, $e->file, $e->line, $e->trace->as_string ) if (!$exception_missingslice);
     $exception_missingslice = 1;
     $log4->error('Slice missing for gene '.$gffGene->id());
     push @{$prob_genes}, $e->id;
     $gene_nosave++;
     next GFFGENE;
-} elsif ( $e = Exception::Class->caught() ) { 
+} elsif ( $e = Exception::Class->caught() ) {
     my $msg = $@;
     my $trace;
     if ($msg =~ /MSG:\s+(.*?)(STACK.*?)Ensembl API version/s) { $msg = $1; $trace = $2 }
@@ -297,9 +334,9 @@ if ( $e = Exception::Class->caught('Exception::GffDoc::StopCodons') ) {
     next GFFGENE;
 } else {
     $gene_save++;
-}    
- 
-    }    
+}
+
+    }
 
     return [$gene_save, $gene_nosave, $non_coding];
 }

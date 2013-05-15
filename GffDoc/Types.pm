@@ -716,7 +716,11 @@ around BUILDARGS => sub {
         }
 
         #y don't really care about id for exon/CDS
-        if ($hash{id} =~ /ID=\s?"?(\S+?)"?\s?;/) { $hash{id} = $1; }
+        if ($hash{id} =~ /ID=\s?"?(\S+?)"?\s?;/) {
+            $hash{id} = $1;
+        } else {
+            $hash{id} = 0;
+        }
         return $class->$orig(%hash);
 
     } else {
@@ -860,7 +864,7 @@ __PACKAGE__->meta->make_immutable();
 
 1;
 
-=head3 GffDoc::Feature::Gff3::CDS
+=head3 GffDoc::Feature::Gff3::polypeptide
 
     Class representing a minimal set of info for integrating polypeptide data when required.
     At the moment it is only used for when CDS data is implicitly defined via polypeptides, but it 
@@ -881,7 +885,11 @@ around BUILDARGS => sub {
     my $orig  = shift;
     my $class = shift;
     my %hash = @_;
-    if ($hash{id} =~ /ID=\s?(\S+?)\s?;/) { $hash{id} = $1; 
+    if ($hash{id} =~ /ID=\s?(\S+?)\s?;/) {
+		my $id = $1;
+		my @parents = $hash{id} =~ /(?:Parent|Derives_from)=\s?(\S+?)\s?;/g;
+		$hash{parent} = join(',', keys %{{ map {$_ => 'superstar'} @parents}}) if @parents;
+		$hash{id} = $id;
     } else { Exception::GffDoc->throw( stage => 'Parser', type => 'FeatureLine::Identifier', error => 'gene identifiers must be of gff3 format (ID=blah): '.$nt.$hash{id}) }
     return $class->$orig(%hash);
 };
@@ -2162,6 +2170,7 @@ with 'GffDoc::Feature::Role';
 has 'gffGene' => (is => 'ro', isa => 'GffDoc::Gff3::Gene', required => 1, writer => '_gffGene');
 has 'exons' => (is => 'ro', isa => 'ArrayRef[GffDoc::Feature::Gff3::exon]', required => 1, writer => '_exons');
 has 'CDSs' => (is => 'ro', isa => 'ArrayRef[GffDoc::Feature::Gff3::CDS]', required => 1, writer => '_CDSs');
+has 'polypeptides' => (is => 'ro', isa => 'ArrayRef[GffDoc::Feature::Gff3::polypeptide]', required => 0, writer => '_polypeptides');
 #y either record the appropriate exon info here - i.e. by number or reference or store it in the exon itself 
 #y makes no diff - i.e. either boolean: exon->is_start() vs. address exon eq mRNA->start_exon - use Scalar::Util 'refaddr';
 has 'trnsl_start_exon' => (is => 'ro', isa => 'GffDoc::Feature::Gff3::exon', writer => '_trnsl_start_exon');
