@@ -110,6 +110,9 @@ if ( $e = Exception::Class->caught('Exception::GffDoc::Gene') ) {
     $nochildren_exception = 1;
     push @{$prob_genes}, $e->id;
     next GENE;
+} elsif ( $e = Exception::Class->caught('Exception::GffDoc') ) { 
+    moan_e ( ref $e, $e->stage, $e->type, $e->error, $e->package, $e->file, $e->line, $e->trace->as_string );
+    exit;
 } elsif ( $e = Exception::Class->caught() ) { 
     moan ( 'This is a Bug. Nothing shoulbe be caught at this level.', $@ );
     exit;
