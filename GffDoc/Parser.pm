@@ -3,7 +3,7 @@ use Mouse;
 use GffDoc::Types;
 use GffDoc::Exceptions qw/moan moan_e $nt moan_c/;
 with 'GffDoc::Activity::Minimal::Role';
-has [qw/ignore_id_duplicates leafnonunique gff_feature_num polypeptide/] => (is => 'rw');
+has [qw/ignore_id_duplicates leafnonunique gff_feature_num polypeptide force_nasty_endings/] => (is => 'rw');
 has [qw/gff3file/]  => (is => 'ro', required => 1,);
 has 'types_regexp' => (is => 'ro');
 has 'modules' => (is => 'rw', isa => 'Int');
@@ -33,7 +33,7 @@ sub run {
         next LINE if ($line =~ /^[\x20\x09]*$/x); # ignore empty lines
         next LINE if ($line =~ /^[\x20\x09]*\x23/x); # ignore comment lines
         
-        $no_final_semicolon = 1 if ($line !~ /\x3B\x20*$/); # check lines end with ';' 
+        $no_final_semicolon = 1 if ($line !~ /\x3B\x20*$/ && !$self->force_nasty_endings); # check lines end with ';' - whatever, it's their problem
 
         #y pointless considering the following...
         $nine_col_format = 1 if ($line !~/^([^\t]+\t){8}[^\t]+$/);
@@ -228,9 +228,13 @@ sub _thereDocNoSemiColon {
 
     my $file = shift;
 my $message = <<"PREFIX";
-[*] Gtf/Gff features lines must terminate with ';'. For a quick fix try:
+While Gtf/Gff do not require lines to terminate with ';'. However, I prefer all key-value pairs to 
+terminate with a semi-colon to avoid nasty line-endings and other oddities that mess up string comparisons.
+For a quick fix try:
 
   > perl -i -pe 's/(.*[^;]\\s*)\\n/\${1};\\n/' $file
+
+Alternatively just stripe out horrible things like \\r or if you must run with the -force_nasty_endings option.
 
 PREFIX
 
@@ -428,7 +432,7 @@ use List::MoreUtils qw(any);
 with 'GffDoc::Activity::Minimal::Role';
 
 #y gtf has start and stop codons - prolly ought to ignore them and modify start/stop appropriately...
-has [qw/gtf pseudo_string leafnonunique gff_feature_num polypeptide/] => (is => 'rw');
+has [qw/gtf pseudo_string leafnonunique gff_feature_num polypeptide force_nasty_endings/] => (is => 'rw');
 #has 'gff_gene_num' => (is => 'rw'); 
 has [qw/gff3file/]  => (is => 'ro', required => 1,);
 has 'types' => (is => 'rw', isa => 'HashRef', auto_deref => 1);
@@ -501,9 +505,15 @@ eval {
         next LINE if ($line =~ /^[\x20\x09]*$/x); # ignore empty lines
         next LINE if ($line =~ /^[\x20\x09]*\x23/x); # ignore comment lines
 
-        Exception::GffDoc->throw( stage => 'Parser', type => 'FeatureLine::Format', 
-            error => qq{Malformed feature line $. (lines must terminate with ';') [run preparser]}
-        ) if ($line !~ /\x3B\x20*$/);
+        if(!$self->force_nasty_endings) {
+            Exception::GffDoc->throw( stage => 'Parser', type => 'FeatureLine::Format', 
+                error => qq{Malformed feature line $. (lines must terminate with ';') [run preparser]}
+            ) if ($line !~ /\x3B\x20*$/);
+        } else {
+           # almost certainly not required but just in case let's perform pretty must the lazyest work around possible
+           $line =~ s/(.*[^;]\s*)\n/${1};\n/;
+           $line =~ s/\r//; # and just in case...
+        }
 
         if ( 
 

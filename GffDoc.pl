@@ -67,6 +67,7 @@ my $no_grep_file = 0;
 my $ignore_ref_check1 = 0;
 my $ignore_ref_check2 = 0;
 my $biotype_key = q{};
+my $force_nasty_endings = 0;
 
 &GetOptions( 
     #'M=s@'              => \@modules,
@@ -101,6 +102,7 @@ my $biotype_key = q{};
     'user:s'                        => \$user,
     'validate'                      => \$validate,
     'version:s'                     => \$version,
+    'force_nasty_endings'                     => \$force_nasty_endings,
 );
 
 #y put this into lower-level namespace to stop messages propagating up log chain... can't be bothered to read documnetation atm
@@ -218,6 +220,7 @@ my $preparser = GffDoc::Preparser->new(
     modules         => scalar @modules,
     polypeptide     => $polypeptide,
     types_regexp    => $permitted_types,
+    force_nasty_endings     => $force_nasty_endings,
 );
 
 $log4->info('Preparsing '.$file);
@@ -250,6 +253,7 @@ my $parser = GffDoc::Parser->new(
     gff_feature_num => $preparser->gff_feature_num(),
     biotype_key     => $biotype_key,
     biotype_conversions => \%biotype_conversions,
+    force_nasty_endings     => $force_nasty_endings,
 );
 
 $log4->info('Parsing '.$file);
@@ -279,6 +283,7 @@ $log4_details->add_appender($appender_details);
 
 my $eslices;
 if (!$validate) {
+    $db_ad->dbc->prepare("select count(1) from meta"); # can't be bothered
     eval {
         $log4->info('Fetching e! slices');
         $eslices = GffDoc::eSlices->new(
